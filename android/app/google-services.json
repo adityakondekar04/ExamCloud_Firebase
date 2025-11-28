@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "187221473351",
+    "project_id": "student-exam-app-123",
+    "storage_bucket": "student-exam-app-123.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:187221473351:android:4b7075acbfb4d86363d962",
+        "android_client_info": {
+          "package_name": "com.example.myapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCpkpZ6a79oY6MPhOW75_vPltF0Rq1KPec"
+        }
+      ],
+      "services": {
+        "appinvite_.service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
