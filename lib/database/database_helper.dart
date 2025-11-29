@@ -1,33 +1,29 @@
 
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
-import 'dart:async';
-
-import 'package:myapp/models/exam.dart';
-import 'package:myapp/models/question.dart';
+import 'package:examcloud/models/exam.dart';
+import 'package:examcloud/models/question.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
   factory DatabaseHelper() => _instance;
   static Database? _database;
-  static Completer<void>? _dbSeedingCompleter;
 
   DatabaseHelper._internal();
 
   Future<Database> get database async {
-    if (_database != null) {
-      if (_dbSeedingCompleter != null) {
-        await _dbSeedingCompleter!.future;
-      }
-      return _database!;
-    }
+    if (_database != null) return _database!;
     _database = await _initDatabase();
     return _database!;
   }
 
   Future<Database> _initDatabase() async {
-    _dbSeedingCompleter = Completer<void>();
-    String path = join(await getDatabasesPath(), 'student_exam.db');
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, 'exam_database.db');
+
+    // For development, you might want to delete the database to re-seed it
+    await deleteDatabase(path);
+
     return await openDatabase(
       path,
       version: 1,
@@ -35,92 +31,84 @@ class DatabaseHelper {
     );
   }
 
-  Future _onCreate(Database db, int version) async {
+  Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
       CREATE TABLE exams(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT
+        id INTEGER PRIMARY KEY,
+        title TEXT,
+        startTime TEXT,
+        duration INTEGER,
+        passkey TEXT
       )
     ''');
+
     await db.execute('''
       CREATE TABLE questions(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id INTEGER PRIMARY KEY,
         examId INTEGER,
         questionText TEXT,
         options TEXT,
-        correctOption INTEGER,
+        correctAnswerIndex INTEGER
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE user_exams(
+        examId INTEGER PRIMARY KEY,
         FOREIGN KEY (examId) REFERENCES exams (id)
       )
     ''');
+
     await _seedDatabase(db);
-    _dbSeedingCompleter!.complete();
   }
 
   Future<void> _seedDatabase(Database db) async {
     // Seed Exams
-    int exam1Id = await db.insert('exams', {'title': 'Mathematics Exam'});
-    int exam2Id = await db.insert('exams', {'title': 'History Exam'});
+    await db.insert('exams', {
+      'id': 1,
+      'title': 'Mathematics Exam',
+      'startTime': DateTime.now().add(const Duration(minutes: 1)).toIso8601String(),
+      'duration': 60,
+      'passkey': 'math123',
+    });
+    await db.insert('exams', {
+      'id': 2,
+      'title': 'History Exam',
+      'startTime': DateTime.now().add(const Duration(hours: 2)).toIso8601String(),
+      'duration': 45,
+      'passkey': 'hist123',
+    });
 
-    // Seed Questions for Mathematics Exam
+    // Seed Questions for Math Exam (id: 1)
     await db.insert('questions', {
-      'examId': exam1Id,
+      'id': 1,
+      'examId': 1,
       'questionText': 'What is 2 + 2?',
-      'options': '["3", "4", "5", "6"]',
-      'correctOption': 1
+      'options': '3||4||5||6',
+      'correctAnswerIndex': 1,
     });
     await db.insert('questions', {
-      'examId': exam1Id,
+      'id': 2,
+      'examId': 1,
       'questionText': 'What is 10 * 5?',
-      'options': '["40", "50", "60", "70"]',
-      'correctOption': 1
-    });
-    await db.insert('questions', {
-      'examId': exam1Id,
-      'questionText': 'What is the square root of 81?',
-      'options': '["7", "8", "9", "10"]',
-      'correctOption': 2
-    });
-    await db.insert('questions', {
-      'examId': exam1Id,
-      'questionText': 'What is 12 / 3?',
-      'options': '["2", "3", "4", "5"]',
-      'correctOption': 2
+      'options': '45||55||50||60',
+      'correctAnswerIndex': 2,
     });
 
-
-    // Seed Questions for History Exam
+    // Seed Questions for History Exam (id: 2)
     await db.insert('questions', {
-      'examId': exam2Id,
+      'id': 3,
+      'examId': 2,
       'questionText': 'Who was the first president of the United States?',
-      'options': '["Abraham Lincoln", "George Washington", "Thomas Jefferson", "John Adams"]',
-      'correctOption': 1
-    });
-    await db.insert('questions', {
-      'examId': exam2Id,
-      'questionText': 'In which year did World War II end?',
-      'options': '["1943", "1944", "1945", "1946"]',
-      'correctOption': 2
-    });
-    await db.insert('questions', {
-      'examId': exam2Id,
-      'questionText': 'What was the primary cause of the Cold War?',
-      'options': '["Economic competition", "Ideological conflict", "Territorial disputes", "All of the above"]',
-      'correctOption': 1
-    });
-     await db.insert('questions', {
-      'examId': exam2Id,
-      'questionText': 'The ancient city of Rome was built on how many hills?',
-      'options': '["5", "6", "7", "8"]',
-      'correctOption': 2
+      'options': 'Thomas Jefferson||Abraham Lincoln||George Washington||John Adams',
+      'correctAnswerIndex': 2,
     });
   }
 
   Future<List<Exam>> getExams() async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query('exams');
-    return List.generate(maps.length, (i) {
-      return Exam.fromMap(maps[i]);
-    });
+    return List.generate(maps.length, (i) => Exam.fromMap(maps[i]));
   }
 
   Future<List<Question>> getQuestions(int examId) async {
@@ -130,8 +118,32 @@ class DatabaseHelper {
       where: 'examId = ?',
       whereArgs: [examId],
     );
-    return List.generate(maps.length, (i) {
-      return Question.fromMap(maps[i]);
-    });
+    return List.generate(maps.length, (i) => Question.fromMap(maps[i]));
+  }
+
+  Future<void> registerForExam(int examId) async {
+    final db = await database;
+    await db.insert(
+      'user_exams',
+      {'examId': examId},
+      conflictAlgorithm: ConflictAlgorithm.ignore, // Ignore if already registered
+    );
+  }
+
+  Future<List<Exam>> getRegisteredExams() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT e.* FROM exams e
+      INNER JOIN user_exams ue ON e.id = ue.examId
+    ''');
+    return List.generate(maps.length, (i) => Exam.fromMap(maps[i]));
+  }
+
+  Future<List<Exam>> getSelectedExams() async {
+    return getRegisteredExams(); // Keep for compatibility if used elsewhere
+  }
+
+  Future<void> addExamToUser(int examId) async {
+    await registerForExam(examId); // Keep for compatibility
   }
 }

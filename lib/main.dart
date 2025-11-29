@@ -1,71 +1,69 @@
 
 import 'package:flutter/material.dart';
-import 'package:myapp/router.dart';
+import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
+
+import 'package:examcloud/providers/theme_provider.dart';
+import 'package:examcloud/providers/user_provider.dart';
+import 'package:examcloud/app_theme.dart';
+import 'package:examcloud/router.dart';
 import 'firebase_options.dart';
+
+final RouteObserver<ModalRoute<void>> routeObserver = RouteObserver<ModalRoute<void>>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  await FirebaseAppCheck.instance.activate(
-    webProvider: ReCaptchaV3Provider('6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'),
-    androidProvider: AndroidProvider.debug,
-    appleProvider: AppleProvider.debug,
-  );
-  runApp(const MyApp());
+  runApp(const ExamCloudApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class ExamCloudApp extends StatelessWidget {
+  const ExamCloudApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    const primaryColor = Color(0xFF6200EE);
-    const secondaryColor = Color(0xFF03DAC6);
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => UserProvider()),
+      ],
+      child: const _AppRouterView(),
+    );
+  }
+}
 
-    final textTheme = Theme.of(context).textTheme.apply(
-          fontFamily: 'Lato',
+class _AppRouterView extends StatefulWidget {
+  const _AppRouterView();
+
+  @override
+  State<_AppRouterView> createState() => _AppRouterViewState();
+}
+
+class _AppRouterViewState extends State<_AppRouterView> {
+  late final AppRouter _appRouter;
+
+  @override
+  void initState() {
+    super.initState();
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    _appRouter = AppRouter(userProvider);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, child) {
+        return MaterialApp.router(
+          title: 'ExamCloud',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: themeProvider.themeMode,
+          routerConfig: _appRouter.router,
         );
-
-    return MaterialApp.router(
-      routerConfig: router,
-      title: 'Student Exam App',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: primaryColor,
-          primary: primaryColor,
-          secondary: secondaryColor,
-          surface: Colors.grey[100],
-          onSurface: Colors.black,
-          onPrimary: Colors.white,
-          onSecondary: Colors.black,
-          onError: Colors.white,
-        ),
-        textTheme: textTheme.copyWith(
-          displayLarge: const TextStyle(fontSize: 57, fontWeight: FontWeight.bold, fontFamily: 'Oswald'),
-          titleLarge: const TextStyle(fontSize: 22, fontWeight: FontWeight.w500, fontFamily: 'Roboto'),
-          bodyMedium: const TextStyle(fontSize: 14, fontFamily: 'Lato'),
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: primaryColor,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          titleTextStyle: TextStyle(fontFamily: 'Oswald', fontSize: 24, fontWeight: FontWeight.bold)
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            foregroundColor: Colors.white,
-            backgroundColor: primaryColor,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500, fontFamily: 'Roboto'),
-          ),
-        ),
-        useMaterial3: true,
-      ),
+      },
     );
   }
 }

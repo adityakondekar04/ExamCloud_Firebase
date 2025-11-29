@@ -1,62 +1,88 @@
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
-class DisqualifiedScreen extends StatelessWidget {
+class DisqualifiedScreen extends StatefulWidget {
   const DisqualifiedScreen({super.key});
+
+  @override
+  State<DisqualifiedScreen> createState() => _DisqualifiedScreenState();
+}
+
+class _DisqualifiedScreenState extends State<DisqualifiedScreen> {
+  bool _isOnline = false;
+  late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkInitialConnectivity();
+    _listenToConnectivityChanges();
+  }
+
+  void _checkInitialConnectivity() async {
+    final connectivityResult = await Connectivity().checkConnectivity();
+    setState(() {
+      _isOnline = !connectivityResult.contains(ConnectivityResult.none);
+    });
+  }
+
+  void _listenToConnectivityChanges() {
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((List<ConnectivityResult> results) {
+      setState(() {
+        _isOnline = !results.contains(ConnectivityResult.none);
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.red[900], // Dark red background
+      appBar: AppBar(
+        title: const Text('Disqualified'),
+        automaticallyImplyLeading: false,
+      ),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(16.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Icon(
-                Icons.signal_wifi_off,
+                Icons.error_outline,
+                color: Colors.red,
                 size: 80,
-                color: Colors.white,
               ),
               const SizedBox(height: 24),
-              const Text(
-                'Disqualified',
-                style: TextStyle(
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
+              Text(
+                'You have been disqualified.',
+                style: Theme.of(context).textTheme.headlineMedium,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
               const Text(
-                'You were disqualified for connecting to the internet during the exam.',
-                style: TextStyle(
-                  fontSize: 18,
-                  color: Colors.white70,
-                ),
+                'This can happen if you switch apps, or if airplane mode is turned off during the exam.',
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 48),
-              ElevatedButton.icon(
-                onPressed: () {
-                  // Navigate back to the home screen
-                  context.go('/');
-                },
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.red[900], // Text color
-                  textStyle: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+              const SizedBox(height: 40),
+              if (!_isOnline)
+                const Text(
+                  'Please turn off airplane mode and connect to the internet to proceed.',
+                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
                 ),
-                icon: const Icon(Icons.home),
-                label: const Text('Back to Home'),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _isOnline ? () => context.go('/dashboard') : null,
+                child: const Text('Back to Dashboard'),
               ),
             ],
           ),

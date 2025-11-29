@@ -1,8 +1,8 @@
 
 import 'package:flutter/material.dart';
-import 'package:myapp/database/database_helper.dart';
-import 'package:myapp/models/exam.dart';
 import 'package:go_router/go_router.dart';
+import 'package:examcloud/database/database_helper.dart';
+import 'package:examcloud/models/exam.dart';
 
 class ExamsScreen extends StatefulWidget {
   const ExamsScreen({super.key});
@@ -12,24 +12,48 @@ class ExamsScreen extends StatefulWidget {
 }
 
 class _ExamsScreenState extends State<ExamsScreen> {
-  late Future<List<Exam>> _exams;
+  late Future<List<Exam>> _examsFuture;
+  final Set<int> _registeredExams = {};
 
   @override
   void initState() {
     super.initState();
-    _exams = DatabaseHelper().getExams();
+    _loadExams();
+    _loadRegisteredExams();
+  }
+
+  void _loadExams() {
+    _examsFuture = DatabaseHelper().getExams();
+  }
+
+  void _loadRegisteredExams() async {
+    final registered = await DatabaseHelper().getRegisteredExams();
+    setState(() {
+      _registeredExams.addAll(registered.map((e) => e.id));
+    });
+  }
+
+  void _registerForExam(Exam exam) async {
+    await DatabaseHelper().registerForExam(exam.id);
+    setState(() {
+      _registeredExams.add(exam.id);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Successfully registered for ${exam.title}.'),
+        backgroundColor: Colors.green,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Available Exams'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+        title: const Text('All Exams'),
       ),
       body: FutureBuilder<List<Exam>>(
-        future: _exams,
+        future: _examsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -40,40 +64,24 @@ class _ExamsScreenState extends State<ExamsScreen> {
           } else {
             final exams = snapshot.data!;
             return ListView.builder(
-              padding: const EdgeInsets.all(16.0),
               itemCount: exams.length,
               itemBuilder: (context, index) {
                 final exam = exams[index];
-                return Card(
-                  elevation: 4.0,
-                  margin: const EdgeInsets.symmetric(vertical: 8.0),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.0),
-                  ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.all(16.0),
-                    title: Text(
-                      exam.title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18.0,
-                      ),
-                    ),
-                    trailing: ElevatedButton(
-                      onPressed: () {
-                        // Navigate to the rules screen, passing the exam id
-                        context.go('/rules', extra: exam);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.secondary,
-                        foregroundColor: Theme.of(context).colorScheme.onSecondary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8.0),
+                final isRegistered = _registeredExams.contains(exam.id);
+                return ListTile(
+                  title: Text(exam.title),
+                  subtitle: Text('Duration: ${exam.duration} minutes'),
+                  trailing: isRegistered
+                      ? ElevatedButton(
+                          onPressed: () {
+                            context.go('/passkey', extra: exam);
+                          },
+                          child: const Text('Start Exam'),
+                        )
+                      : ElevatedButton(
+                          onPressed: () => _registerForExam(exam),
+                          child: const Text('Register'),
                         ),
-                      ),
-                      child: const Text('Start Exam'),
-                    ),
-                  ),
                 );
               },
             );

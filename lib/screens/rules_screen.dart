@@ -1,10 +1,9 @@
 
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:myapp/models/exam.dart';
+import 'package:examcloud/models/exam.dart';
 
 class RulesScreen extends StatefulWidget {
   final Exam exam;
@@ -15,17 +14,29 @@ class RulesScreen extends StatefulWidget {
 }
 
 class _RulesScreenState extends State<RulesScreen> {
-  bool _hasInternetConnection = true;
+  bool _isOffline = false;
   late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
 
   @override
   void initState() {
     super.initState();
-    _checkConnectivity();
-    _connectivitySubscription = Connectivity()
-        .onConnectivityChanged
-        .listen((List<ConnectivityResult> result) {
-      _updateConnectionStatus(result);
+    _checkInitialConnectivity();
+    _listenToConnectivityChanges();
+  }
+
+  void _checkInitialConnectivity() async {
+    final connectivityResult = await Connectivity().checkConnectivity();
+    setState(() {
+      _isOffline = connectivityResult.contains(ConnectivityResult.none);
+    });
+  }
+
+  void _listenToConnectivityChanges() {
+    _connectivitySubscription =
+        Connectivity().onConnectivityChanged.listen((List<ConnectivityResult> results) {
+      setState(() {
+        _isOffline = results.contains(ConnectivityResult.none);
+      });
     });
   }
 
@@ -35,119 +46,74 @@ class _RulesScreenState extends State<RulesScreen> {
     super.dispose();
   }
 
-  Future<void> _checkConnectivity() async {
-    final result = await Connectivity().checkConnectivity();
-    if (mounted) {
-      _updateConnectionStatus(result);
-    }
-  }
-
-  void _updateConnectionStatus(List<ConnectivityResult> result) {
-    if (mounted) {
-      setState(() {
-        if (result.contains(ConnectivityResult.none) && result.length == 1) {
-          _hasInternetConnection = false;
-        } else {
-          _hasInternetConnection = true;
-        }
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.exam.title),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
       ),
       body: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Exam Rules',
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineMedium,
             ),
             const SizedBox(height: 24),
-            const Card(
-              elevation: 0,
-              color: Color.fromARGB(255, 255, 226, 226),
-              child: Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    Icon(Icons.airplanemode_active,
-                        size: 40, color: Colors.red),
-                    SizedBox(height: 16),
-                    Text(
-                      'You must turn on Airplane Mode to disconnect from all networks before starting the exam.',
-                      textAlign: TextAlign.center,
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                    ),
-                  ],
+            const RuleItem(
+                text:
+                    'Turn on Airplane Mode and disconnect from all networks before starting.'),
+            const RuleItem(
+                text: 'Do not switch apps or leave the exam screen.'),
+            const RuleItem(
+                text:
+                    'Your exam will be auto-submitted and you will be disqualified if you violate the rules.'),
+            const Spacer(),
+            if (!_isOffline)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: Text(
+                    'Please turn on Airplane Mode and disconnect from all networks to start the exam.',
+                    style: TextStyle(
+                        color: Colors.red, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'If you turn off airplane mode or connect to the internet at any point during the exam, you will be automatically disqualified.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 32),
-            if (_hasInternetConnection)
-              const Column(
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text(
-                    'Waiting for you to disconnect...',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.red,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ],
-              )
-            else
-              const Column(
-                children: [
-                  Icon(Icons.check_circle, color: Colors.green, size: 40),
-                  SizedBox(height: 16),
-                  Text(
-                    'You are offline. You can now start the exam.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.green,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ],
+            Center(
+              child: ElevatedButton(
+                onPressed: _isOffline
+                    ? () {
+                        context.go('/exam', extra: widget.exam);
+                      }
+                    : null,
+                child: const Text('Start Exam'),
               ),
-            const Spacer(),
-            ElevatedButton(
-              onPressed: _hasInternetConnection
-                  ? null
-                  : () {
-                      context.go('/exam', extra: widget.exam);
-                    },
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                textStyle:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              child: const Text('Start Exam'),
             ),
-            const SizedBox(height: 20),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class RuleItem extends StatelessWidget {
+  final String text;
+  const RuleItem({super.key, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        children: [
+          const Icon(Icons.check_circle, color: Colors.green),
+          const SizedBox(width: 16),
+          Expanded(child: Text(text)),
+        ],
       ),
     );
   }
